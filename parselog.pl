@@ -21,7 +21,15 @@ while(<STDIN>){
    # NA if no value
    my @i=split/ /; 
 
-   # 0 of 0/1 correct (column 5) gets replaced with NA below
+   #print "\n------\n$_\n";
+   #print "\t* $#F: '@F'\n\t*$#i: '@i'\n";
+   # bad testinging line?
+   if( $#i==4 || $i[4] == 0) {
+     print STDERR "bad line $. (no resp?): @F\n";
+     $i[5]="NA";
+   }
+   # item 6 (index 5) is 1 correct, 0 error. 
+   # dont want to replace incorrect with NA
    $i[$_]||="NA" for(0..4,6..9);
 
    print join(" ", $a[$i++], $F[0], @i);
