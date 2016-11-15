@@ -147,6 +147,7 @@ RTAndDiff <-
  d.diff %>% 
  select(-acc,RT=mRT) %>%
  rbind(rtavg)     
+
 p.rt.a <- 
  ggplot(RTAndDiff) + 
  aes(x=seenno,y=RT,color=subj) + #,linetype=BType) + 

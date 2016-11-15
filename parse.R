@@ -7,7 +7,20 @@
 #  - seenno  -- the number of times that unique image has been seen -- different from trial number. test always the last 2 seenno's
 require(magrittr)
 require(dplyr)
+require(tidyr)
 
+# find 2sd outliers
+inrange <- function(x,vec) { r<-range(vec); x > r[1] & x < r[2] }
+isin2sd <- function(x) { inrange(x, mean(x,na.rm=T) + 2*c(-1,1)*sd(x,na.rm=T)) }
+
+#matlab rowname access
+rn <- function(x,n) { idx<-rownames(x)== n; ifelse(any(idx), x[idx],NA)[[1]] }
+`%.%` <-function(x,n)  rn(x,deparse(substitute(n)))
+rnm <- function(init,namelist) Reduce(rn,namelist,init)
+# m$s %.% info %.% age
+# rnm(m$s,list('info','age'))
+
+## use perl to parse log file
 parselog <- function(fname) {
   #fname <- "../../SeqBlock2/logs/log_sophie2_2016.10.25-14.09.44.txt"
   cmd<-sprintf('./parselog.pl < %s',fname)
@@ -325,6 +338,8 @@ readmat <- function(matfile,subjid=NULL) {
  if(is.null(subjid)) subjid<- gsub('.*([0-9]{5}_[0-9]{8}).*','\\1',matfile)
 
  bigdf$subj <- subjid
+ bigdf$sex <- as.vector( m$s %.% info %.% sex )
+ bigdf$age <- as.vector( m$s %.% info %.% age )
 
 
  return(bigdf)
@@ -350,15 +365,30 @@ perfinger2pertrial <- function(bigdf) {
 
  d <-  
   bigdf %>% 
-  group_by(subj,runno,agency,test,corseq,allcor,trial.within,trial) %>% 
+  group_by(subj,age,sex,runno,agency,test,corseq,allcor,trial.within,trial) %>% 
   summarise(
-    finalrt=max(finger.rt,na.rm=T),
+    #finalrt=max(finger.rt,na.rm=T),
     allrts=paste(collapse=",",finger.rt),
     pushedseq=paste(collapse="",na.omit(finger.resp)),
     nfingercor= na.omit(c(which( finger.corseq != ifelse(is.na(finger.resp),0,finger.resp) ),5))[1] - 1,
     totalfingercor= sum(finger.cor,na.rm=T)
   ) %>% 
-  arrange(trial) 
+  arrange(trial) %>%
+  # get individual rts
+  separate(allrts,c('rt1','rt2','rt3','rt4'),sep=',')%>%
+  mutate_each(funs(round(as.numeric(.),3)),rt1,rt2,rt3,rt4) %>%
+  mutate(rtdiff=rt4-rt1) %>% 
+  # add a within block+finger sequence count: number times sequence has been seen
+  group_by(subj,runno,agency,corseq) %>% 
+  mutate(nseenseq=1:n()) %>%
+  # add a counter for how long its been since this sequence was last seen
+  arrange(subj,runno,agency,trial) %>% 
+  mutate(seengap=c(0,diff(trial))) %>%
+  # give all blocks a common sequence number (1,2 for 1st or 2nd sequence in block)
+  group_by(subj,runno,agency) %>%
+  arrange(subj,runno,trial) %>% 
+  mutate(seqno=as.numeric(factor(corseq,levels=unique(corseq))))
+
 
  #d <- reshape2::dcast(bigdf, subj+trial+runno+trial.within+agency+test+seqidxnum+corseq+allcor ~ finger.no,value.var=c('finger.rt'))
  # d<- data.table::dcast(data.table::setDT(bigdf), subj+trial+runno+trial.within+agency+test+seqidxnum+corseq+allcor ~ finger.no,value.var=c('finger.rt','finger.resp','finger.cor'))
@@ -366,3 +396,20 @@ perfinger2pertrial <- function(bigdf) {
  #print.data.frame(df,row.names=F)
  return(d)
 }
+
+# add test results to 'ret' trials
+addtestcor <- function(d) {
+  merge(  
+    # get just the rehearsal trials
+    d %>%
+     filter(test=='ret'),
+    # to merge with just the test trials (only want merge columns and corr/incorrect column)
+    d %>% 
+     ungroup %>% 
+     filter(test=='test.ret') %>% 
+     select(subj,corseq,runno,agency,testcor=allcor),
+   by=c('subj','corseq','runno','agency')) %>%
+ # dont need test column anymore (all ret)
+ select(-test)
+}
+
