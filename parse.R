@@ -9,6 +9,23 @@ require(magrittr)
 require(dplyr)
 require(tidyr)
 
+# hard code ages for pilot
+pilotages <- rbind(
+ # kid pilots
+ c('11579_20161111', 12), 
+ # lab people pilot
+ c('will',   30 ), 
+ c('deepu',  31 ), # *
+ c('Scott',  31 ), # *
+ c('julia',  25 ), # *
+ c('sophie2',23 ), # *
+ c('jen',    25 ), # *
+ c('hemali', 19 ), # *
+ c('Ruth',   19 )  # *
+) %>% data.frame %>% set_colnames(c('subj','age'))
+
+
+
 # find 2sd outliers
 inrange <- function(x,vec) { r<-range(vec); x > r[1] & x < r[2] }
 isin2sd <- function(x) { inrange(x, mean(x,na.rm=T) + 2*c(-1,1)*sd(x,na.rm=T)) }
@@ -145,6 +162,37 @@ getFullMatSeqLunaDate <- function() {
  lapply(FUN=readmat,want) %>% bind_rows() %>% perfinger2pertrial()
 }
 
+getPilots <- function(){
+
+ want2 <- Filter( 
+  function(x){
+   file.info(x)$size>2000 & 
+   !grepl('test',x) &
+   grepl('deepu|will|Scott|julia|sophie2|jen',x)
+   }, 
+   allmatfiles(getlogdir('2'))
+ )
+ want3 <- Filter( 
+  function(x){
+   file.info(x)$size>2000 & 
+   !grepl('test',x) &
+   grepl('hemali|Ruth',x)
+   }, 
+   allmatfiles(getlogdir('3'))
+ )
+
+ # get mat info from all pilot
+ all <- lapply(FUN=readmat,c(want2,want3)) %>% bind_rows() %>% perfinger2pertrial()
+
+ # remove file name from subject
+ all$subj <- gsub('.*log_([A-Za-z0-9]+)_.*','\\1',all$subj)
+
+ # add hardcoded ages
+ all <- merge(all%>%select(-age),pilotages,by='subj',all.x=T)
+
+ return(all)
+}
+
 
 
 getSeq2Pilots <- function() {
@@ -168,21 +216,6 @@ getSeq3Pilots <- function(patt) {
   d<-getSeq(getlogdir('3'),'hemali|Ruth')
 }
 
-
-
-ages <- rbind(
- # kid pilots
- c('11579_20161111', 12), 
- # lab people pilot
- c('will',   30 ), 
- c('deepu',  31 ), # *
- c('Scott',  31 ), # *
- c('julia',  25 ), # *
- c('sophie2',23 ), # *
- c('jen',    25 ), # *
- c('hemali', 19 ), # *
- c('Ruth',   19 )  # *
-) %>% data.frame %>% set_colnames(c('subj','age'))
 
 
 
