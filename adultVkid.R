@@ -34,6 +34,8 @@ all <-
 
 # change what we plot based on if we only look at correct trials
 all.all     <- all
+write.table(all.all,file="img/all.csv",quote=F,row.names=F,sep=",")
+# read.table('img/all.csv',sep=",",header=T)
 all.coronly <- all.all %>% filter(!is.na(allcor), allcor==1)
 if(CORRECTONLY)  all <- all.coronly
 
@@ -161,3 +163,4 @@ p4.slope.diff <-
  ggtitle('rt diff per trial in mean RT4 - first RT4') + 
  theme_bw()
 savimg(p4.slope.diff)
+
