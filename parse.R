@@ -155,6 +155,7 @@ getFullMatSeqLunaDate <- function() {
   function(x){
    file.info(x)$size>2000 & 
    !grepl('test',x) &
+   !grepl('11579_20161111',x) & # this subject did not actually do the task
    grepl('[0-9]{5}_[0-9]{8}',x)
    }, 
    allmatfiles(getlogdir('3'))
