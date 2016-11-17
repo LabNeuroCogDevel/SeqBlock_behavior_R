@@ -1,10 +1,12 @@
 #!/usr/bin/env Rscript
-
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
 source('parse.R')
 
 # look at incorrect and correct trials?
 # NOTE: need to rerun normdf, rtsumdf , and agentdiffdf  if switching
-CORRECTONLY <- F
+CORRECTONLY <- T
 
 # quick function to save images
 savimg <- function(p) {
@@ -37,7 +39,22 @@ all.all     <- all
 write.table(all.all,file="img/all.csv",quote=F,row.names=F,sep=",")
 # read.table('img/all.csv',sep=",",header=T)
 all.coronly <- all.all %>% filter(!is.na(allcor), allcor==1)
-if(CORRECTONLY)  all <- all.coronly
+
+#if(CORRECTONLY)  all <- all.coronly
+
+all <- function(){
+  if(CORRECTONLY)
+     all.coronly
+  else
+     all.all
+}
+normdf <- function(){
+ all() %>%
+ group_by(subj,agegrp,runno,agency,seqno) %>%
+ arrange(subj,runno,trial) %>% 
+ mutate( firstrt4=first(rt4), normrt4= rt4 - firstrt4  )
+
+}
 
 # TODO: consider removing outlier RTs
 # with isin2sd(rt4) 
@@ -81,7 +98,7 @@ p1.acc.hist <-
 ## RT
 
 p1.rt4 <-
- ggplot(all) +
+ ggplot(all()) +
  aes(x=nseenseq,y=rt4,group=agency,color=agency) +
  geom_jitter(alpha=.2,width=.2,height=0) + 
  geom_smooth(method='lm') +
@@ -92,7 +109,7 @@ savimg(p1.rt4)
 
 ## look at difference between first and last push
 p2.rt4.rt1 <-
- ggplot(all) +
+ ggplot(all()) +
  aes(x=nseenseq,y=rt4-rt1,group=agency,color=agency) +
  geom_jitter(alpha=.2,width=.2,height=0) + 
  geom_smooth(method='lm') +
@@ -103,15 +120,9 @@ savimg(p2.rt4.rt1)
 
 ## "normalize" RT by subtracting first RT time
 #  first rt for each seqno in each agency block in each run
-normdf <-
- all %>%
- group_by(subj,agegrp,runno,agency,seqno) %>%
- arrange(subj,runno,trial) %>% 
- mutate( firstrt4=first(rt4), normrt4= rt4 - firstrt4  )
-
 
 p3.rt4.norm <-
- ggplot(normdf) +
+ ggplot(normdf()) +
  aes(x=nseenseq,y=normrt4,group=agency,color=agency) +
  #geom_jitter(alpha=.2,width=.2,height=0) + 
  geom_smooth(method='lm') +
@@ -122,7 +133,7 @@ savimg(p3.rt4.norm)
 
 
 p3.rt4.norm.nofacet <-
- ggplot(normdf) +
+ ggplot(normdf()) +
  aes(x=nseenseq,y=normrt4,color=agegrp,linetype=agency,group=paste(agency,agegrp)) +
  #geom_jitter(alpha=.2,width=.2,height=0) + 
  geom_smooth(method='lm') +
@@ -133,7 +144,7 @@ savimg(p3.rt4.norm.nofacet)
 
 ## slopes
 rtsumdf <- 
- normdf %>%
+ normdf() %>%
  group_by(subj,age,sex,agegrp,
           agency,
           nseenseq) %>%
@@ -164,3 +175,54 @@ p4.slope.diff <-
  theme_bw()
 savimg(p4.slope.diff)
 
+
+
+## bea scatter plots
+
+rtrate <- 
+ normdf() %>%
+ select(subj,age,agegrp,sex,runno,agency,nseenseq,trial,rt4,seqno,firstrt4,normrt4) %>%
+ group_by(subj,age,sex,agegrp,
+          runno,agency,seqno) %>%
+ filter(nseenseq == max(nseenseq) & nseenseq > 1 )
+
+## slopes
+getslope <- function(y,x) {
+ lm(data=data.frame(y,x),y~x)$coefficients[2]
+}
+rtrate.slope <- 
+ normdf() %>%
+ filter(!is.na(firstrt4)) %>%
+ select(subj,age,agegrp,sex,runno,agency,nseenseq,trial,rt4,seqno,firstrt4,normrt4) %>%
+ group_by(subj,age,agegrp, sex,
+          agency) %>%
+ summarise(slope=getslope(normrt4,nseenseq) )
+
+### 
+
+#
+p5.ratebar <- 
+ ggplot(rtrate) +
+ aes(x=agegrp,y=normrt4,color=agency) +
+ #stat_summary(fun.y = mean, geom = "bar",position="dodge",aes(fill=agency)) +
+ geom_boxplot()+
+ geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
+ #scale_y_continuous(limits=c(-1,1)) +
+ ggtitle('RT learning rate: rep last-first')+
+ theme_bw()
+print(p5.ratebar)
+
+#
+p5.ratebar.slope <- 
+ ggplot(rtrate.slope) +
+ aes(x=agegrp,y=slope,color=agency) +
+ #stat_summary(fun.y = mean, geom = "bar",position="dodge",aes(fill=agency)) +
+ geom_boxplot()+
+ geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
+ ggtitle('RT learning rate: slope rt4 ~ rep') +
+ theme_bw()
+print(p5.ratebar.slope )
+savimg(p5.ratebar.slope )
+
+p5.learrate.rt4norm.slopediff <- grid.arrange(p5.ratebar,p5.ratebar.slope)
+savimg(p5.learrate.rt4norm.slopediff)

@@ -15,11 +15,11 @@ pilotages <- rbind(
  c('11579_20161111', 12), 
  # lab people pilot
  c('will',   30 ), 
- c('deepu',  31 ), # *
- c('Scott',  31 ), # *
+ c('deepu',  32 ), # *
+ c('Scott',  26 ), 
  c('julia',  25 ), # *
- c('sophie2',23 ), # *
- c('jen',    25 ), # *
+ c('sophie2',23 ), 
+ c('jen',    25 ), 
  c('hemali', 19 ), # *
  c('Ruth',   19 )  # *
 ) %>% data.frame %>% set_colnames(c('subj','age'))
