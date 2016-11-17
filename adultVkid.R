@@ -17,7 +17,7 @@ savimg <- function(p) {
  if(CORRECTONLY)  odir <- paste0(odir,'_coronly')
 
  if(!dir.exists(odir)) dir.create(odir,recursive=T)
- ggsave(file=sprintf('%s/%s.png',odir,n))
+ ggsave(file=sprintf('%s/%s.png',odir,n),plot=p)
 }
 
 ## ALL DATA
@@ -220,9 +220,62 @@ p5.ratebar.slope <-
  geom_boxplot()+
  geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
  ggtitle('RT learning rate: slope rt4 ~ rep') +
+ #scale_color_manual(values=c("black","black"))+
  theme_bw()
 print(p5.ratebar.slope )
 savimg(p5.ratebar.slope )
 
 p5.learrate.rt4norm.slopediff <- grid.arrange(p5.ratebar,p5.ratebar.slope)
 savimg(p5.learrate.rt4norm.slopediff)
+
+
+###  ACCURACY
+
+## data
+accrate.slope <- 
+ accdf  %>%
+ #select(subj,age,agegrp,sex,agency,nseenseq,trial,rt4,seqno,firstrt4,normrt4) %>%
+ group_by(subj,age,agegrp, sex,
+          agency) %>%
+ summarise(slope=getslope(acc,nseenseq) )
+
+# TODO: dont collapse accross seqno ?
+accrate <- 
+ accdf %>%
+ select(-mrt4,-n) %>%
+ group_by(subj,age,sex,agegrp,
+          agency) %>%
+ filter(nseenseq == max(nseenseq) | nseenseq == 1 ) %>%
+ mutate(nseenseq = ifelse(nseenseq==1,'first','last')) %>%
+ spread(nseenseq,acc)
+
+## plots
+
+p5.ratebar.acc <- 
+ ggplot(accrate) +
+ aes(x=agegrp,y=last-first,color=agency) +
+ #stat_summary(fun.y = mean, geom = "bar",position="dodge",aes(fill=agency)) +
+ geom_boxplot()+
+ geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
+ #scale_y_continuous(limits=c(-1,1)) +
+ ggtitle('Acc learning rate: rep last-first')+
+ theme_bw()
+print(p5.ratebar.acc)
+
+#
+p5.ratebar.slope.acc <- 
+ ggplot(accrate.slope) +
+ aes(x=agegrp,y=slope,color=agency) +
+ #stat_summary(fun.y = mean, geom = "bar",position="dodge",aes(fill=agency)) +
+ geom_boxplot()+
+ geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
+ ggtitle('Acc learning rate: slope acc ~ rep') +
+ #scale_color_manual(values=c("black","black"))+
+ theme_bw()
+print(p5.ratebar.slope.acc )
+savimg(p5.ratebar.slope.acc )
+
+
+p5.learrate.acc.slopediff <- grid.arrange(p5.ratebar.acc,p5.ratebar.slope.acc)
+savimg(p5.learrate.acc.slopediff)
+
