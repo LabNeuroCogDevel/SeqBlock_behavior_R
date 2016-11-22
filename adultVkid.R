@@ -4,43 +4,17 @@ library(dplyr)
 library(gridExtra)
 source('parse.R')
 
+## ALL DATA
+all.all <- getAllData() 
+#all.all <-  read.table('img/all.csv',sep=",",header=T)
+
+## 
 # look at incorrect and correct trials?
 # NOTE: need to rerun normdf, rtsumdf , and agentdiffdf  if switching
 CORRECTONLY <- T
 
-# quick function to save images
-savimg <- function(p) {
- n<-gsub('\\.','_',deparse(substitute(p)))
- print(p)
- odir <- 'img/kidsvadult'
-
- if(CORRECTONLY)  odir <- paste0(odir,'_coronly')
-
- if(!dir.exists(odir)) dir.create(odir,recursive=T)
- ggsave(file=sprintf('%s/%s.png',odir,n),plot=p)
-}
-
-## ALL DATA
-pilot <- getPilots()
-kids <- getFullMatSeqLunaDate()
-
-all <-
- rbind(as.data.frame(kids),pilot) %>%
- filter(agency!='control', test=='ret') %>%
- mutate(
-   # break ages into groups
-   agegrp=cut(as.numeric(age),breaks=c(0,18,Inf),labels=c('kid','adult')),
-   # rename yolked to yoked
-   agency=ifelse(agency=='yolked','yoked',agency) 
-  )
-
 # change what we plot based on if we only look at correct trials
-all.all     <- all
-write.table(all.all,file="img/all.csv",quote=F,row.names=F,sep=",")
-# read.table('img/all.csv',sep=",",header=T)
 all.coronly <- all.all %>% filter(!is.na(allcor), allcor==1)
-
-#if(CORRECTONLY)  all <- all.coronly
 
 all <- function(){
   if(CORRECTONLY)
@@ -48,6 +22,7 @@ all <- function(){
   else
      all.all
 }
+
 normdf <- function(){
  all() %>%
  group_by(subj,agegrp,runno,agency,seqno) %>%
@@ -279,3 +254,61 @@ savimg(p5.ratebar.slope.acc )
 p5.learrate.acc.slopediff <- grid.arrange(p5.ratebar.acc,p5.ratebar.slope.acc)
 savimg(p5.learrate.acc.slopediff)
 
+
+######
+## box plots of the same thing
+
+p6.bar.ratebar <- 
+ ggplot(rtrate) +
+ aes(x=agegrp,y=normrt4,color=agency) +
+ stat_summary(fun.y = mean, geom = "bar",position="dodge",aes(fill=agency)) +
+ #geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
+ #scale_y_continuous(limits=c(-1,1)) +
+ ggtitle('RT learning rate: rep last-first')+
+ theme_bw()
+print(p6.bar.ratebar)
+
+#
+p6.bar.ratebar.slope <- 
+ ggplot(rtrate.slope) +
+ aes(x=agegrp,y=slope,color=agency) +
+ stat_summary(fun.y = mean, geom = "bar",position="dodge",aes(fill=agency)) +
+ #geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
+ ggtitle('RT learning rate: slope rt4 ~ rep') +
+ #scale_color_manual(values=c("black","black"))+
+ theme_bw()
+print(p6.bar.ratebar.slope )
+#savimg(p6.bar.ratebar.slope )
+
+p6.bar.learrate.rt4norm.slopediff <- grid.arrange(p6.bar.ratebar,p6.bar.ratebar.slope)
+savimg(p6.bar.learrate.rt4norm.slopediff)
+
+
+# ACCURACY
+
+p6.bar.ratebar.acc <- 
+ ggplot(accrate) +
+ aes(x=agegrp,y=last-first,color=agency) +
+ stat_summary(fun.y = mean, geom = "bar",position="dodge",aes(fill=agency)) +
+ #geom_boxplot()+
+ #geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
+ #scale_y_continuous(limits=c(-1,1)) +
+ ggtitle('Acc learning rate: rep last-first')+
+ theme_bw()
+print(p6.bar.ratebar.acc)
+
+#
+p6.bar.ratebar.slope.acc <- 
+ ggplot(accrate.slope) +
+ aes(x=agegrp,y=slope,color=agency) +
+ stat_summary(fun.y = mean, geom = "bar",position="dodge",aes(fill=agency)) +
+ #geom_jitter(position=position_jitterdodge(.9,jitter.width=.2,jitter.height=0),alpha=.2)  +
+ ggtitle('Acc learning rate: slope acc ~ rep') +
+ #scale_color_manual(values=c("black","black"))+
+ theme_bw()
+print(p6.bar.ratebar.slope.acc )
+#savimg(p6.bar.ratebar.slope.acc )
+
+
+p6.bar.learrate.acc.slopediff <- grid.arrange(p6.bar.ratebar.acc,p6.bar.ratebar.slope.acc)
+savimg(p6.bar.learrate.acc.slopediff)

@@ -21,7 +21,8 @@ pilotages <- rbind(
  c('sophie2',23 ), 
  c('jen',    25 ), 
  c('hemali', 19 ), # *
- c('Ruth',   19 )  # *
+ c('Ruth',   19 ), # *
+ c('alina',  20 )  # *
 ) %>% data.frame %>% set_colnames(c('subj','age'))
 
 
@@ -177,7 +178,7 @@ getPilots <- function(){
   function(x){
    file.info(x)$size>2000 & 
    !grepl('test',x) &
-   grepl('hemali|Ruth',x)
+   grepl('hemali|Ruth|alina',x)
    }, 
    allmatfiles(getlogdir('3'))
  )
@@ -447,3 +448,41 @@ addtestcor <- function(d) {
  select(-test)
 }
 
+
+
+## get all the data we care about
+# remove 'control' block
+# set agegrp
+# rename yolked to yoked, put first as factor
+getAllData <- function() {
+  pilot <- getPilots()
+  kids <- getFullMatSeqLunaDate()
+  
+  all.all <-
+   rbind(as.data.frame(kids),pilot) %>%
+   filter(agency!='control', test=='ret') %>%
+   mutate(
+     # break ages into groups
+     agegrp=cut(as.numeric(age),breaks=c(0,18,Inf),labels=c('kid','adult')),
+     # rename yolked to yoked
+     agency=ifelse(agency=='yolked','yoked',agency) ,
+     agency=factor(agency,levels=c(yoked="yoked",choice="choice"))
+   )
+
+ # save out this data
+ write.table(all.all,file="img/all.csv",quote=F,row.names=F,sep=",")
+
+ return(all.all)
+}
+
+# quick function to save images
+savimg <- function(p,correctonly=CORRECTONLY) {
+ n<-gsub('\\.','_',deparse(substitute(p)))
+ print(p)
+ odir <- 'img/kidsvadult'
+
+ if(CORRECTONLY)  odir <- paste0(odir,'_coronly')
+
+ if(!dir.exists(odir)) dir.create(odir,recursive=T)
+ ggsave(file=sprintf('%s/%s.png',odir,n),plot=p)
+}
