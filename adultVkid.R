@@ -14,9 +14,9 @@ all.all <- getAllData()
 CORRECTONLY <- T
 
 # change what we plot based on if we only look at correct trials
-all.coronly <- all.all %>% filter(!is.na(allcor), allcor==1)
+all.coronly <- onlyCorrect(all.all,'first') 
 
-all <- function(){
+d.all <- function(){
   if(CORRECTONLY)
      all.coronly
   else
@@ -24,7 +24,7 @@ all <- function(){
 }
 
 normdf <- function(){
- all() %>%
+ d.all() %>%
  group_by(subj,agegrp,runno,agency,seqno) %>%
  arrange(subj,runno,trial) %>% 
  mutate( firstrt4=first(rt4), normrt4= rt4 - firstrt4  )
@@ -73,7 +73,7 @@ p1.acc.hist <-
 ## RT
 
 p1.rt4 <-
- ggplot(all()) +
+ ggplot(d.all()) +
  aes(x=nseenseq,y=rt4,group=agency,color=agency) +
  geom_jitter(alpha=.2,width=.2,height=0) + 
  geom_smooth(method='lm') +
@@ -84,7 +84,7 @@ savimg(p1.rt4)
 
 ## look at difference between first and last push
 p2.rt4.rt1 <-
- ggplot(all()) +
+ ggplot(d.all()) +
  aes(x=nseenseq,y=rt4-rt1,group=agency,color=agency) +
  geom_jitter(alpha=.2,width=.2,height=0) + 
  geom_smooth(method='lm') +

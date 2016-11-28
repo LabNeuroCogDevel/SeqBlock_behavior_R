@@ -432,6 +432,28 @@ perfinger2pertrial <- function(bigdf) {
  return(d)
 }
 
+# remove trials where first is wrong 
+# works on all.csv; output ofgetAllData, or getPilots, etc
+# second argument is how to restrict correct trials:
+#  all:       all trials of a specific finger sequence have to be correct
+#  firstonly: only the first trial .... 
+#  first:     the first, and then the trial itself
+onlyCorrect <- function(d,method='all') {
+ d.ready <- 
+  d %>% 
+  group_by(subj,runno,seqno,agency) %>%
+  arrange(trial)
+
+ if(method=='idv') 
+  d.ready %>% filter(allcor==1)
+ else if(method=='firstonly')
+  d.ready %>% filter(first(allcor)==1)
+ else if(method=='first')
+  d.ready %>% filter(first(allcor)==1,allcor)
+ else # all or anything not above
+  d.ready %>% filter(base::all(allcor)==1)
+}
+
 # add test results to 'ret' trials
 addtestcor <- function(d) {
   merge(  
