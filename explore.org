@@ -1,0 +1,184 @@
+#+TITLE: Sequence Task Exploration
+
+
+* One Subject
+
+
+#+BEGIN_SRC R  :results output silent :session :exports none
+  # we need to load in functions and data
+  source('parse.R')
+  all.all <- read.table('img/all.csv',header=T,sep=",")
+  # look at a single subject
+  example_subj <- 'will'
+  d <- all.all %>% filter(subj==example_subj)
+
+#+END_SRC
+** Full Trial
+We are looking at pilot data from src_R[:session]{example_subj} {{{results(=will=)}}}.
+
+We can plot the whole visit. Here we are plotting the reaction time for the first button push (rt1) of the recalled sequence as well as the last (rt4) for each trial
+note the correct/incorrect refers to the whole trial (correct=all four pushed correctly in order).
+#+BEGIN_SRC R :session :exports results :title plotall :results output graphics :file notebook/01_full.png 
+#:width 1000 #ignored
+
+  library(ggplot2)
+
+  d.plot <- d %>% nameForPlot
+
+  # want to get each rt1 to 4 on their own row
+  # and make the value numeric (no leading 'rt')
+  d.plot.idvrt <-
+      d.plot %>%
+      gather(fingerno,rt,rt1,rt4) %>%
+      mutate(fingerno=as.numeric(gsub('rt','',fingerno)) )
+
+ # what's the actual sequence. try to position it in the center of rt4 values
+ d.seqname <- 
+   d.plot %>% 
+   group_by(subj,agency,seqno,corseq) %>% 
+   summarise(trial=mean(trial),rt=mean(rt4))
+
+  p <-
+      ggplot(d.plot.idvrt ) +
+      aes(x=trial,
+          y=rt,
+          color=agency,
+          shape=response,
+          linetype=fingerseq,
+          group=paste(fingerno,blkgrp) ) +
+      geom_point() +
+      geom_line() + 
+      geom_text(data=d.seqname,aes(group=NULL,shape=NULL,linetype=NULL,label=corseq)) +
+      theme_bw() + 
+      scale_shape_manual(values=c(1,16))+
+      ggtitle(paste0(example_subj,': all trials, rt1 & 4'))
+  print(p)
+#+END_SRC
+
+#+RESULTS:
+[[file:notebook/01_full.png]]
+
+
+** Collapsed Trials
+We can extract the interleaved finger sequences as if learning each sequence is part of a continous block.
+Note that some sequences are seen more often than others.
+#+BEGIN_SRC R :results output graphics :file notebook/02_fingerseq.png :session :exports results
+   p0.withintrial <-
+	ggplot(d.plot %>% gather(fingerno,rt,rt1,rt4) ) +
+	aes(x=nseenseq,
+            y=rt,
+            color=agency,
+            shape=response,
+            linetype=fingerseq,
+            group=blkgrp ) +
+	geom_point() +
+        geom_line() +
+	theme_bw() + 
+        facet_grid(.~fingerno) +  #,scale='free_y') +
+        scale_shape_manual(values=c(1,16))+
+        ggtitle('each finger sequence, rt1 & 4') 
+    print(p0.withintrial)
+#+END_SRC
+
+#+RESULTS:
+[[file:notebook/02_fingerseq.png]]
+
+** Correct and Normalize
+Currently, we only care about what's going on when all the mechanics are working. So we need to get rid of incorrect trials.
+We also want to adjust for the difficulty of each sequence, so we'll normalize by the first trial within each finger sequence.
+To do this we need to drop all finger sequence blocks that have an incorrecly keyed first trial.
+
+#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/03_correct_normalized.png 
+
+  d.plot.cor <- d.plot %>% onlyCorrect('first') %>% normrtbyfirst
+  p.cor <- 
+    ggplot(d.plot.cor) +
+    aes(y=rt.normt1,
+	x=nseenseq,
+	color=agency,
+	shape=response,
+	linetype=fingerseq,
+	group=blkgrp) +
+      geom_point() +
+      geom_line() +
+      theme_bw() +
+      ggtitle('rt4, normalized by first rt4')
+  print(p.cor)
+      
+ncor <- length(unique(d.plot.cor$blkgrp))
+nall <- length(unique(d.plot$blkgrp))
+
+#+END_SRC
+
+#+RESULTS:
+[[file:notebook/03_correct_normalized.png]]
+
+
+Notice some points in a line are not present. 
+Even though the first response was correct some trials of that sequence are not and are not included.
+
+We loose src_R[:session]{nall - ncor} {{{results(=6=)}}} full sequence blocks by requiring the first to be correct.
+That and excluding all incorrect trials results in dropping 
+ src_R[:session]{nrow(d.plot)-nrow(d.plot.cor)} {{{results(=30=)}}} trials from the analysis.
+
+** By Block
+With normalized correct trials, we can try to fit a line where slope (change in rt) can be use to assess learning.
+
+#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/04_agency.png
+
+  p.agency <- 
+    ggplot(d.plot.cor) +
+    aes(y=rt.normt1,
+	x=nseenseq,
+	color=agency) +
+      geom_point(alpha=.4) +
+      stat_smooth(method='lm') +
+      theme_bw() +
+      ggtitle('agency')
+  print(p.agency)
+      
+#+END_SRC
+
+#+RESULTS:
+[[file:notebook/04_agency.png]]
+
+
+#+BEGIN_SRC R  :session :exports none :results output silent
+   getslope <- function(blk) {
+     m <- lm(rt.normt1~nseenseq,d.plot.cor %>% filter(agency==blk))
+     round(m$coefficients[[2]],2)
+  }
+   choicerate <- getslope('choice')
+   yokerate   <- getslope('yoked')
+#+END_SRC
+
+Here src_R[:session]{example_subj} {{{results(=will=)}}} has a rate of 
+src_R[:session]{choicerate} {{{results(=-0.05=)}}} sec/trial for choice and
+src_R[:session]{yokerate} {{{results(=0.05=)}}} sec/trial for yoke 
+
+* Everyone
+
+#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/05_everyone.png
+  all.plot <-
+      all.all %>%
+      nameForPlot %>%
+      onlyCorrect('first') %>%
+      normrtbyfirst
+
+  p.all.agency <- 
+     ggplot(all.plot) +
+     aes(y=rt.normt1,
+	 x=nseenseq,
+	 color=agency) +
+      geom_point(alpha=.4) +
+     facet_wrap(~subj) +
+     stat_smooth(method='lm') +
+     theme_bw() +
+      ggtitle('effect of agency for all subj')
+
+   print(p.all.agency)
+
+#+END_SRC
+
+#+RESULTS:
+[[file:notebook/05_everyone.png]]
