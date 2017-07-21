@@ -243,17 +243,12 @@ readmat <- function(matfile,subjid=NULL) {
  # blocktype  = m.tasklog.blockSeq{5}(2)
 
 
- seqidx  <- which(grepl('sequences',rownames(m$s)))
- fingerseqs <- m$s[[seqidx ]]
- #same as: seq <- m$s[9]
+ fingerseqs <- m$s %.% sequences
+ blocktypes <- m$tasklog %.% blockSeq
+ # bulk of the info is with 'response', we'll call it pushseq
+ pushseq <- m$tasklog %.% response
 
- blockidx   <- which(grepl('blockSeq',rownames(m$tasklog)))
- blocktypes <- m$tasklog[[blockidx]]
-
-
- # bulk of the info is with 'response'
- respidx <- which(grepl('response',rownames(m$tasklog)))
- pushseq <- m$tasklog[[respidx]]
+ 
  #
  # dim(pushseq)
  #  2 5 2 8
@@ -284,7 +279,11 @@ readmat <- function(matfile,subjid=NULL) {
 
  # all combinations of 1:dimlen for each dimension
  # --same as: idxs <- as.matrix(do.call(expand.grid,sapply(dim(pushseq),function(x){list(1:x)})))
- idxsall <- dim(pushseq) %>% sapply(function(x){list(1:x)} ) %>% do.call(what=expand.grid) %>% as.matrix
+ idxsall <-
+     dim(pushseq) %>%
+     sapply(function(x){list(1:x)} ) %>%
+     do.call(what=expand.grid) %>%
+     as.matrix
  # need to order it how matlab would
  idxordered <- order(
    idxsall[,2]*10^3+
@@ -304,70 +303,70 @@ readmat <- function(matfile,subjid=NULL) {
  # and get all of the responses
  allpushes <- pushseq[idxs]
 
- bigdf<- lapply(1:dim(idxs)[1],function(di){
+ parsematlabidx <- function(di,idxs){
+      # 'ret' or 'ret.test': name of trial '
+      viewtype <- names(  pushseq[ idxs[di,1],idxs[di,2],idxs[di,3],idxs[di,4]] ) 
+
+      # this trial's keypresses
+      x <- allpushes[[di]] # same as: x <- pushseq[t(idxs[di,])]
+      #print(x)
+
+      # if this never happend (i.e. 3:8 on ret.test) skip along
+      if(is.null(x)) return(NULL)
+
+      seqidxnum <- x[[4]][1] # 1 or 2
+      iscor     <- x[[2]][1] # 0 or 1
+
+      # see pushseq dim description
+      tinfo <- data.frame(t(unlist(idxs[di,])))
+      names(tinfo) <- c('viewno','runno','agencyno','trialno') 
+      #                   1/2      1:5     1:2       1:8
 
 
-  # 'ret' or 'ret.test': name of trial '
-  viewtype <- names(  pushseq[ idxs[di,1],idxs[di,2],idxs[di,3],idxs[di,4]] ) 
+      # in what order should fingers have been pushed
+      # stored in 3-d matrix
+      #corseq <- fingerseqs[ idxs[di,2], idxs[di,1], seqidxnum ]
+      # called from matlab like: s.sequences(runnum, blocki, thisTrialSeq) -- where here fingerseq == sequences
+      corseq <- fingerseqs[ tinfo$runno , tinfo$agencyno , seqidxnum ]
+      # turn 1234 into 1,2,3,4
+      corseql <- splitnums( corseq )
 
-  # this trial's keypresses
-  x <- allpushes[[di]] # same as: x <- pushseq[t(idxs[di,])]
-  #print(x)
+      # should always be 4, but maybe we'll change it at some point
+      # redudant to do this for every trial
+      numInSeq <- length(corseql)
 
-  # if this never happend (i.e. 3:8 on ret.test) skip along
-  if(is.null(x)) return(NULL)
+      
+      # what was the order of actual finger pushes
+      # NAs for no pushes
+      respseq <- splitnums( x[[1]][1], numInSeq )
+      # how fast did we push the buttons?
+      resprt <- addnas(x[[3]], numInSeq )
+      
+      btype <- unlist(blocktypes[[ tinfo$runno ]])[tinfo$agencyno ]
 
-  seqidxnum <- x[[4]][1] # 1 or 2
-  iscor     <- x[[2]][1] # 0 or 1
-
-  # see pushseq dim description
-  tinfo <- data.frame(t(unlist(idxs[di,])))
-  names(tinfo) <- c('viewno','runno','agencyno','trialno') 
-  #                   1/2      1:5     1:2       1:8
-
-
-  # in what order should fingers have been pushed
-  # stored in 3-d matrix
-  #corseq <- fingerseqs[ idxs[di,2], idxs[di,1], seqidxnum ]
-  # called from matlab like: s.sequences(runnum, blocki, thisTrialSeq) -- where here fingerseq == sequences
-  corseq <- fingerseqs[ tinfo$runno , tinfo$agencyno , seqidxnum ]
-  # turn 1234 into 1,2,3,4
-  corseql <- splitnums( corseq )
-
-  # should always be 4, but maybe we'll change it at some point
-  # redudant to do this for every trial
-  numInSeq <- length(corseql)
-
-  
-  # what was the order of actual finger pushes
-  # NAs for no pushes
-  respseq <- splitnums( x[[1]][1], numInSeq )
-  # how fast did we push the buttons?
-  resprt <- addnas(x[[3]], numInSeq )
- 
-  btype <- unlist(blocktypes[[ tinfo$runno ]])[tinfo$agencyno ]
-
-  # put all this info into a data frame
-  d <- data.frame(
-        # repeated for each finger press
-        trial     = di,
-        runno     = tinfo$runno,
-        trial.within=tinfo$trialno,
-        #typeno    = tinfo$agencyno, # numeric version of to btype
-        #viewno    = tinfo$viewno,   # numeric version of viewtype
-        agency    = btype, 
-        test      = viewtype,  # see also: tinfo$viewno or unname(idxs[di,1]),
-        seqidxnum = seqidxnum, # 1 or 2 -- probably not important
-        corseq    = corseq,
-        allcor    = iscor,
-        # unique to each finger press
-        finger.no    = 1:numInSeq,
-        finger.corseq= corseql,
-        finger.rt    = resprt,
-        finger.resp  = respseq,
-        finger.cor   = (corseql==respseq)
- )
- }) %>% bind_rows()
+      # put all this info into a data frame
+      d <- data.frame(
+          # repeated for each finger press
+          trial     = di,
+          runno     = tinfo$runno,
+          trial.within=tinfo$trialno,
+          #typeno    = tinfo$agencyno, # numeric version of to btype
+          #viewno    = tinfo$viewno,   # numeric version of viewtype
+          agency    = btype, 
+          test      = viewtype,  # see also: tinfo$viewno or unname(idxs[di,1]),
+          seqidxnum = seqidxnum, # 1 or 2 -- probably not important
+          corseq    = corseq,
+          allcor    = iscor,
+          # unique to each finger press
+          finger.no    = 1:numInSeq,
+          finger.corseq= corseql,
+          finger.rt    = resprt,
+          finger.resp  = respseq,
+          finger.cor   = (corseql==respseq)
+      )
+ }
+    
+ bigdf<- lapply(1:dim(idxs)[1],parsematlabidx,idxs) %>% bind_rows()
  
  # add subj id
  if(is.null(subjid)) subjid<- gsub('.*([0-9]{5}_[0-9]{8}).*','\\1',matfile)
@@ -447,12 +446,26 @@ onlyCorrect <- function(d,method='all') {
  if(method=='idv') 
   d.ready %>% filter(allcor==1)
  else if(method=='firstonly')
-  d.ready %>% filter(first(allcor)==1)
+  d.ready %>% filter(first(allcor)==1,first(nseenseq)==1)
  else if(method=='first')
-  d.ready %>% filter(first(allcor)==1,allcor)
+  d.ready %>% filter(first(allcor)==1,first(nseenseq)==1,allcor)
  else # all or anything not above
   d.ready %>% filter(base::all(allcor)==1)
 }
+
+# normalize rt by rt of first trial
+# make column rt.normt1 and check column rt.normv (v for value)
+# probably want to use onlyCorrect before using this
+# TODO: allow variable normon and normfrom values so we could use rt1 instead of rt4
+normrtbyfirst <- function(d,normon='rt4') {
+ d %>% 
+  group_by(subj,runno,seqno,agency) %>%
+  arrange(trial.within) %>%
+  mutate(rt.normv = first(rt4)) %>%
+  mutate(rt.normt1 = rt4 - rt.normv )
+}
+
+
 
 # add test results to 'ret' trials
 addtestcor <- function(d) {
@@ -482,6 +495,16 @@ getAllData <- function() {
   
   all.all <-
    rbind(as.data.frame(kids),pilot) %>%
+   cleanData()
+
+ # save out this data
+ write.table(all.all,file="img/all.csv",quote=F,row.names=F,sep=",")
+
+ return(all.all)
+}
+
+cleanData <- function(d) {
+ d %>%
    filter(agency!='control', test=='ret') %>%
    mutate(
      # break ages into groups
@@ -490,11 +513,18 @@ getAllData <- function() {
      agency=ifelse(agency=='yolked','yoked',agency) ,
      agency=factor(agency,levels=c(yoked="yoked",choice="choice"))
    )
+}
 
- # save out this data
- write.table(all.all,file="img/all.csv",quote=F,row.names=F,sep=",")
 
- return(all.all)
+# give allcor and seqno better factor values
+# make a block group (runno+agency+seqno)
+nameForPlot <- function(d) {
+    d %>%
+      mutate(
+         response=factor(allcor,labels=list("wrong","correct")),
+         fingerseq=factor(seqno,labels=list("first","second")),
+         blkgrp=paste(runno,agency,seqno)
+     )     
 }
 
 # quick function to save images
@@ -508,3 +538,5 @@ savimg <- function(p,correctonly=CORRECTONLY) {
  if(!dir.exists(odir)) dir.create(odir,recursive=T)
  ggsave(file=sprintf('%s/%s.png',odir,n),plot=p)
 }
+
+

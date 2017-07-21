@@ -1,4 +1,8 @@
 #+TITLE: Sequence Task Exploration
+#+bind: org-export-publishing-directory "./notebook"
+:PROPERTIES:
+:EXPORT_FILE_NAME: notebook/explore.pdf
+:END:
 
 
 * One Subject
@@ -57,7 +61,6 @@ note the correct/incorrect refers to the whole trial (correct=all four pushed co
 
 #+RESULTS:
 [[file:notebook/01_full.png]]
-
 
 ** Collapsed Trials
 We can extract the interleaved finger sequences as if learning each sequence is part of a continous block.
