@@ -8,8 +8,11 @@
 #+BEGIN_SRC R  :results output silent :session :exports none
   # we need to load in functions and data
   source('parse.R')
-  all.all <- read.table('img/all.csv',header=T,sep=",")
+
+  # we can do it the slow way or the fast (cached) way
   #all.all <- getAllData()
+  all.all <- read.table('img/all.csv',header=T,sep=",")
+
   # look at a single subject
   example_subj <- 'will'
   d <- all.all %>% filter(subj==example_subj)
@@ -21,6 +24,7 @@
 
  We can plot the whole visit. Here we are plotting the reaction time for the first button push (rt1) of the recalled sequence as well as the last (rt4) for each trial
  note the correct/incorrect refers to the whole trial (correct=all four pushed correctly in order).
+
  #+BEGIN_SRC R :session :exports results :title plotall :results output graphics :file notebook/01_full.png 
  #:width 1000 #ignored
 
@@ -66,8 +70,10 @@
  #+RESULTS:
  [[file:notebook/01_full.png]]
 
+We can see a gap (no data) between blocks because we are excluding the final two test only trials at the end of each block. 
+
 ** Collapsed Trials
- We can extract the interleaved finger sequences as if learning each sequence is part of a continous block.
+ We can extract the interleaved finger sequences as if learning each sequence is part of a continuous block.
  Note that some sequences are seen more often than others.
  #+BEGIN_SRC R :results output graphics :file notebook/02_fingerseq.png :session :exports results
     p0.withintrial <-
@@ -90,8 +96,9 @@
  #+RESULTS:
  [[file:notebook/02_fingerseq.png]]
 
+
 ** Correct and Normalize
- Currently, we only care about what's going on when all the mechanics are working. So we need to get rid of incorrect trials.
+ If we only care about what's going on when all the mechanics are working, we need to get rid of incorrect trials.
  We also want to adjust for the difficulty of each sequence, so we'll normalize by the first trial within each finger sequence.
  To do this we need to drop all finger sequence blocks that have an incorrecly keyed first trial.
 
@@ -165,219 +172,311 @@ Here src_R[:session]{example_subj} {{{results(=will=)}}} has a rate of
 src_R[:session]{choicerate} {{{results(=-0.05=)}}} sec/trial for choice and
 src_R[:session]{yokerate} {{{results(=0.05=)}}} sec/trial for yoke 
 
+** Accuracy 
+    We can compute accuracy for each repetition of a sequence instead of removing the incorrect trials,.
+Like the RT calculations, each repeat interval may have a different number of trials contributing 
+to the accuracy calculation.
+ #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/03_accuracy.png 
+   slopeandstat <- function(correctratio,nseenseq){
+	summary( lm(correctratio~nseenseq) )$coefficients[2,c(1,4)] %>% t %>% data.frame
+   }
+
+   idv.acc.cond <-
+	d.plot %>%
+	group_by(agency,nseenseq) %>%
+	summarise( correctratio= length(which(allcor==1))/n(), n=n() )
+
+
+   ggplot(idv.acc.cond) +
+	ggtitle('idv. acc. over num. times seq. seen') +
+	aes(x=nseenseq,y=correctratio,color=agency) +
+	geom_point(aes(size=n)) +
+	geom_smooth(method='lm') +
+	scale_y_continuous(limits=c(0,1.05)) +
+	scale_size_continuous(range=c(0.5,2.5)) +
+	theme_bw() %>% LNCDR::lunaize()
+   #+END_SRC
+
+   #+RESULTS:
+   [[file:notebook/03_accuracy.png]]
+
+   There is not enough data to estimate accuracy slopes for a single subject. They are not significant.
+ #+BEGIN_SRC R :session :exports results :colnames yes
+   idv.ac.<- 
+     idv.acc.cond %>% 
+     group_by(agency) %>% 
+     summarise(m=list(slopeandstat(correctratio,nseenseq)) ) %>% 
+     unnest
+ #+END_SRC
+
+ #+RESULTS:
+ | agency | Estimate |          Pr...t.. |
+ |--------+----------+-------------------|
+ | choice |     0.05 | 0.181690113816209 |
+ | yoked  |    0.125 | 0.325800137536758 |
+
 * Everyone
-** accuracy improvement
-#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy.png
-  d.named <- all.all %>% nameForPlot
-  head(d)
+** Accuracy
+*** accuracy improvement
+ #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy.png
+   d.named <- all.all %>% nameForPlot
+   head(d)
 
-  d.acc <-
-      d.named %>%
-      group_by(agegrp,agency,nseenseq,subj,age) %>%
-      summarise( correctratio= length(which(allcor==1))/n(),n=n() )
+   d.acc <-
+       d.named %>%
+       group_by(agegrp,agency,nseenseq,subj,age) %>%
+       summarise( correctratio= length(which(allcor==1))/n(),n=n() )
 
-  ggplot(d.acc) +
-      ggtitle('percent correct for number times seen') + 
-      aes(x=nseenseq,y=correctratio) +
-      geom_jitter(width=.3,height=0) +
-      geom_smooth(method='lm') +
-      scale_y_continuous(limits=c(0,1.05)) +
-      theme_bw() %>% LNCDR::lunaize()
-#+END_SRC
+   ggplot(d.acc) +
+       ggtitle('correct by number times seen') + 
+       aes(x=nseenseq,y=correctratio) +
+       geom_jitter(width=.3,height=0) +
+       geom_smooth(method='lm') +
+       scale_y_continuous(limits=c(0,1.05)) +
+       theme_bw() %>% LNCDR::lunaize()
+ #+END_SRC
 
-#+RESULTS:
-[[file:notebook/accuracy.png]]
+ #+RESULTS:
+ [[file:notebook/accuracy.png]]
 
-** accuracy by age
-How many sequences are correctly preformed as a function of the number of times the sequence has been seen.
-#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy_age_subj.png
-  ggplot(d.acc) +
-      ggtitle('percent correct for number times seen (boxes)') + 
-      aes(x=as.factor(nseenseq),y=correctratio,color=agegrp) +
-      geom_boxplot() +
-      theme_bw() %>% LNCDR::lunaize()
+ People improve.
+ #+BEGIN_SRC R :session :exports results :colnames yes
+ slopeandstat(d.acc$correctratio,d.acc$nseenseq)
+ #+END_SRC
 
-  d.acc.cond <-
-      d.named %>%
-      group_by(agegrp,agency,nseenseq,subj,age) %>%
-      summarise( correctratio= length(which(allcor==1))/n(), n=n() )
+ #+RESULTS:
+ |           Estimate |             Pr...t.. |
+ |--------------------+----------------------|
+ | 0.0344722844634101 | 1.43832897884683e-07 |
 
-  p.acc.cond <-
-      ggplot(d.acc.cond) +
-      ggtitle('percent correct for number times seen by subject') + 
-      aes(x=nseenseq,y=correctratio,color=agency,shape=agency,size=n) +
-      geom_jitter(width=.4,height=0) +
-      geom_smooth(method='lm',aes(size=NULL) ) +
-      theme_bw() +
+**** Including agency
+   #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy_condition.png
+     ggplot(d.acc) +
+	 ggtitle('correct by agency over seen') +
+	 aes(x=nseenseq,y=correctratio,color=agency,linetype=agency)+
+	 geom_jitter(width=.4,height=0)+
+	 geom_smooth(method='lm') +
+	 scale_y_continuous(limits=c(0,1.05)) +
+	 theme_bw()
+   #+END_SRC
+
+   #+RESULTS:
+   [[file:notebook/accuracy_condition.png]]
+    
+
+   #+BEGIN_SRC R :session :exports both  :results output verbatim
+    lm(correctratio~nseenseq + agency:nseenseq,d.acc) %>% summary
+   #+END_SRC
+
+   #+RESULTS:
+   #+begin_example
+
+   Call:
+   lm(formula = correctratio ~ nseenseq + agency:nseenseq, data = d.acc)
+
+   Residuals:
+	Min       1Q   Median       3Q      Max 
+   -0.92624 -0.09088  0.05777  0.13406  0.25465 
+
+   Coefficients:
+			Estimate Std. Error t value Pr(>|t|)    
+   (Intercept)          0.715196   0.023763  30.097  < 2e-16 ***
+   nseenseq             0.030149   0.006703   4.498 9.56e-06 ***
+   nseenseq:agencyyoked 0.012197   0.005826   2.094   0.0371 *  
+   ---
+   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+   Residual standard error: 0.1939 on 326 degrees of freedom
+   Multiple R-squared:  0.09344,	Adjusted R-squared:  0.08788 
+   F-statistic:  16.8 on 2 and 326 DF,  p-value: 1.136e-07
+   #+end_example
+
+*** accuracy by age
+ How many sequences are correctly preformed as a function of the number of times the sequence has been seen.
+ #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy_age_subj.png
+   ggplot(d.acc) +
+       ggtitle('percent correct for number times seen (boxes)') + 
+       aes(x=as.factor(nseenseq),y=correctratio,color=agegrp) +
+       geom_boxplot() +
+       theme_bw() %>% LNCDR::lunaize()
+
+   d.acc.cond <-
+       d.named %>%
+       group_by(agegrp,agency,nseenseq,subj,age) %>%
+       summarise( correctratio= length(which(allcor==1))/n(), n=n() )
+
+   p.acc.cond <-
+       ggplot(d.acc.cond) +
+       ggtitle('percent correct for number times seen by subject') + 
+       aes(x=nseenseq,y=correctratio,color=agency,shape=agency,size=n) +
+       geom_jitter(width=.4,height=0) +
+       geom_smooth(method='lm',aes(size=NULL) ) +
+       theme_bw() +
+       facet_wrap(~subj) +
+       scale_size_continuous(range=c(.5,2.5))+
+       scale_shape_manual(values=c(1,16))+
+       scale_y_continuous(limits=c(0,1.05)) #%>% LNCDR::lunaize()
+   print(p.acc.cond)
+ #+END_SRC
+
+ #+RESULTS:
+ [[file:notebook/accuracy_age_subj.png]]
+
+ And if we collapse across all subjects but divide the set into two age groups (break on 18).
+ #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy_age.png
+
+ p.acc.cond <-
+     ggplot(d.acc.cond) +
+     ggtitle('percent correct for number times seen') + 
+     aes(x=nseenseq,y=correctratio,color=agency,shape=agency,size=n,linetype=agegrp) +
+     geom_jitter(width=.4,height=0) +
+     geom_smooth(method='lm',aes(size=NULL) ) +
+     theme_bw() +
+     scale_size_continuous(range=c(.5,2.5))+
+     scale_shape_manual(values=c(1,16)) +
+     scale_y_continuous(limits=c(0,1.05)) #%>% LNCDR::lunaize()
+ print(p.acc.cond)
+
+ #+END_SRC
+
+ #+RESULTS:
+ [[file:notebook/accuracy_age.png]]
+
+*** slope by age
+    Looking at the value of each slope per person as a function of age.
+ #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy_slope_byage.png
+
+   d.acc.slopes <-
+       d.acc.cond %>%
+       group_by(subj,age,agency) %>%
+       summarise(m=list(slopeandstat(correctratio,nseenseq))) %>%
+       unnest
+
+   ggplot(d.acc.slopes) +
+       ggtitle('change in accuracy learn rate by age')+
+       aes(x=age,y=Estimate,color=agency,group=agency,size=1-Pr...t..) +
+       geom_point() +
+       geom_smooth(method='lm')+
+       theme_bw()
+ #+END_SRC
+
+ #+RESULTS:
+ [[file:notebook/accuracy_slope_byage.png]]
+
+** RT 
+*** Individual RT rate by condition plots
+ #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/05_everyone.png
+   all.plot <-
+       all.all %>%
+       nameForPlot %>%
+       onlyCorrect('first') %>%
+       normrtbyfirst
+
+   p.all.agency <- 
+      ggplot(all.plot) +
+      ggtitle('effect of agency for all subj') +
+      aes(y=rt.normt1,
+	  x=nseenseq,
+	  color=agency) +
+       geom_point(alpha=.4) +
       facet_wrap(~subj) +
-      scale_size_continuous(range=c(.5,2.5))+
-      scale_shape_manual(values=c(1,16))+
-      scale_y_continuous(limits=c(0,1.05)) #%>% LNCDR::lunaize()
-  print(p.acc.cond)
-#+END_SRC
+      stat_smooth(method='lm') +
+      theme_bw() 
 
-#+RESULTS:
-[[file:notebook/accuracy_age_subj.png]]
+    print(p.all.agency)
 
-And if we collapse across all subjects but divide the set into two age groups (break on 18).
-#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy_age.png
+ #+END_SRC
 
-p.acc.cond <-
-    ggplot(d.acc.cond) +
-    ggtitle('percent correct for number times seen') + 
-    aes(x=nseenseq,y=correctratio,color=agency,shape=agency,size=n,linetype=agegrp) +
-    geom_jitter(width=.4,height=0) +
-    geom_smooth(method='lm',aes(size=NULL) ) +
-    theme_bw() +
-    scale_size_continuous(range=c(.5,2.5))+
-    scale_shape_manual(values=c(1,16)) +
-    scale_y_continuous(limits=c(0,1.05)) #%>% LNCDR::lunaize()
-print(p.acc.cond)
+ #+RESULTS:
+ [[file:notebook/05_everyone.png]]
 
-#+END_SRC
+*** Summary plot
+**** correct only response
+ #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/06_everyone_summary.png
+   all.plot <-
+       all.all %>%
+       nameForPlot %>%
+       onlyCorrect('first') %>%
+       normrtbyfirst
 
-#+RESULTS:
-[[file:notebook/accuracy_age.png]]
+   ggplot(all.plot) +
+       ggtitle('average over conditions') +
+       aes(x=nseenseq,y=rt.normt1,color=agency) +
+       geom_point() +
+       geom_smooth() +
+       facet_grid(agency*seqno~runno) +
+       theme_bw()
 
-** slope by age
-   Looking at the value of each slope per person as a function of age.
-#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/accuracy_slope_byage.png
+   ggplot(all.plot) +
+       ggtitle('average over agency') +
+       aes(x=nseenseq,y=rt.normt1,color=agency) +
+       geom_point() +
+       geom_smooth() +
+       theme_bw()
 
-  ex <- d.acc.cond %>% filter(subj=='will',agency=='choice')
+   ggplot(all.plot) +
+       ggtitle('raw rts per condition') +
+       aes(x=nseenseq,y=rt.normt1,color=agency,group=subj,shape=as.factor(seqno),linetype=as.factor(seqno)) +
+       geom_line() +
+       geom_point() +
+       facet_grid(agency*seqno~runno) +
+       theme_bw()
 
-  slopeandstat <- function(correctratio,nseenseq){
-       summary( lm(correctratio~nseenseq) )$coefficients[2,c(1,4)] %>% t %>% data.frame
-  }
+   ggplot(all.plot) +
+       ggtitle('Trial Traces per subject') +
+       aes(x=nseenseq,y=rt.normt1,color=agency) +
+       geom_line(aes(group=paste(blkgrp))) +
+       facet_wrap(~subj) + theme_bw()
 
-  d.acc.slopes <-
-      d.acc.cond %>%
-      group_by(subj,age,agency) %>%
-      summarise(m=list(slopeandstat(correctratio,nseenseq))) %>%
-      unnest
+   ggplot(all.plot) +
+       ggtitle('normalized correct-only RT series per subject') +
+       aes(x=nseenseq,y=rt.normt1,color=agency,shape=as.factor(seqno),linetype=as.factor(seqno),
+	   group=paste(seqno,agency,runno)
+	   ) +
+       geom_line() +
+       facet_wrap(~subj) +
+       theme_bw()
+ #+END_SRC
 
-  ggplot(d.acc.slopes) +
-      ggtitle('change in accuracy learn rate by age')+
-      aes(x=age,y=Estimate,color=agency,group=agency,size=1-Pr...t..) +
-      geom_point() +
-      geom_smooth(method='lm')+
-      theme_bw()
-#+END_SRC
+ #+RESULTS:
+ [[file:notebook/06_everyone_summary.png]]
 
-#+RESULTS:
-[[file:notebook/accuracy_slope_byage.png]]
+**** all response
+   #+BEGIN_SRC R :session :exports results :results output graphics :file notebook/06_everyone_all_summary.png
+     all.andincor <-
+	 all.all %>%
+	 nameForPlot
 
- 
-** Individual RT rate by condition plots
-#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/05_everyone.png
-  all.plot <-
-      all.all %>%
-      nameForPlot %>%
-      onlyCorrect('first') %>%
-      normrtbyfirst
+     ggplot(all.andincor) +
+	   ggtitle('all RT series per subject') +
+	   aes(x=nseenseq,y=rt1,color=agency,
+	       group=blkgrp, # seqno,agency,runno,
+	       shape=response
+	       ) +
+	   geom_point() +
+	   geom_line() +
+	   facet_wrap(~subj) +
+	   scale_shape_manual(values=c(1,16)) +
+	   theme_bw()
 
-  p.all.agency <- 
-     ggplot(all.plot) +
-     ggtitle('effect of agency for all subj') +
-     aes(y=rt.normt1,
-	 x=nseenseq,
-	 color=agency) +
-      geom_point(alpha=.4) +
-     facet_wrap(~subj) +
-     stat_smooth(method='lm') +
-     theme_bw() 
+     all.andincor.norm <- all.andincor%>%
+	 normrtbyfirst
 
-   print(p.all.agency)
+     ggplot(all.andincor.norm) +
+	   ggtitle('normalized all RT series per subject') +
+	   aes(x=nseenseq,
+               y=rt.normt1,
+               color=agency,
+	       group=blkgrp, # seqno,agency,runno,
+               linetype=as.factor(seqno),
+	       shape=response
+	       ) +
+	   geom_point() +
+	   geom_line() +
+	   facet_wrap(~subj) +
+	   scale_shape_manual(values=c(1,16)) +
+	   theme_bw()
+   #+END_SRC
 
-#+END_SRC
-
-#+RESULTS:
-[[file:notebook/05_everyone.png]]
-
-** Summary plot
-#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/06_everyone_summary.png
-  all.plot <-
-      all.all %>%
-      nameForPlot %>%
-      onlyCorrect('first') %>%
-      normrtbyfirst
-
-  ggplot(all.plot) +
-      ggtitle('average over conditions') +
-      aes(x=nseenseq,y=rt.normt1,color=agency) +
-      geom_point() +
-      geom_smooth() +
-      facet_grid(agency*seqno~runno) +
-      theme_bw()
-
-  ggplot(all.plot) +
-      ggtitle('average over agency') +
-      aes(x=nseenseq,y=rt.normt1,color=agency) +
-      geom_point() +
-      geom_smooth() +
-      theme_bw()
-
-  ggplot(all.plot) +
-      ggtitle('raw rts per condition') +
-      aes(x=nseenseq,y=rt.normt1,color=agency,group=subj,shape=as.factor(seqno),linetype=as.factor(seqno)) +
-      geom_line() +
-      geom_point() +
-      facet_grid(agency*seqno~runno) +
-      theme_bw()
-
-  ggplot(all.plot) +
-      ggtitle('Trial Traces per subject') +
-      aes(x=nseenseq,y=rt.normt1,color=agency) +
-      geom_line(aes(group=paste(blkgrp))) +
-      facet_wrap(~subj) + theme_bw()
-
-  ggplot(all.plot) +
-      ggtitle('normalized correct-only RT series per subject') +
-      aes(x=nseenseq,y=rt.normt1,color=agency,shape=as.factor(seqno),linetype=as.factor(seqno),
-	  group=paste(seqno,agency,runno)
-	  ) +
-      geom_line() +
-      facet_wrap(~subj) +
-      theme_bw()
-#+END_SRC
-
-#+RESULTS:
-[[file:notebook/06_everyone_summary.png]]
-
-#+BEGIN_SRC R :session :exports results :results output graphics :file notebook/06_everyone_all_summary.png
-  all.andincor <-
-      all.all %>%
-      nameForPlot
-
-  ggplot(all.andincor) +
-	ggtitle('all RT series per subject') +
-	aes(x=nseenseq,y=rt1,color=agency,
-	    group=blkgrp, # seqno,agency,runno,
-	    shape=response
-	    ) +
-	geom_point() +
-	geom_line() +
-	facet_wrap(~subj) +
-	scale_shape_manual(values=c(1,16)) +
-	theme_bw()
-
-  all.andincor.norm <- all.andincor%>%
-      normrtbyfirst
-
-  ggplot(all.andincor.norm) +
-	ggtitle('normalized all RT series per subject') +
-	aes(x=nseenseq,
-            y=rt.normt1,
-            color=agency,
-	    group=blkgrp, # seqno,agency,runno,
-            linetype=as.factor(seqno),
-	    shape=response
-	    ) +
-	geom_point() +
-	geom_line() +
-	facet_wrap(~subj) +
-	scale_shape_manual(values=c(1,16)) +
-	theme_bw()
-#+END_SRC
-
-#+RESULTS:
-[[file:notebook/06_everyone_all_summary.png]]
+   #+RESULTS:
+   [[file:notebook/06_everyone_all_summary.png]]
