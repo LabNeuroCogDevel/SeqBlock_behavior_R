@@ -98,6 +98,7 @@ getlogdir <- function(versionno='3') {
 
   hostname <- Sys.info()['nodename']
   beares <- switch(hostname,
+    "reese"="/Volumes/L/bea_res",
     "reese-loeff114"="/mnt/B/bea_res",
     "//oacres1/rcn1/bea_res"
   )
@@ -503,6 +504,9 @@ getAllData <- function() {
  return(all.all)
 }
 
+# - keep only noncontrol and ret  (??)
+# - fix "yolked" to yoked
+# - add agegroup
 cleanData <- function(d) {
  d %>%
    filter(agency!='control', test=='ret') %>%
@@ -540,3 +544,39 @@ savimg <- function(p,correctonly=CORRECTONLY) {
 }
 
 
+
+# plot RT for finger 1 and finger 4 acorss all trials for a single subject
+idv1and4 <- function(all.all, example_subj='will'){
+   # name allcor->response, seqno->fingerseq, run+agency+seqno -> blkgrp
+   d.plot <- all.all %>% filter(subj==example_subj) %>% nameForPlot
+
+   # want to get each rt1 to 4 on their own row
+   # and make the value numeric (no leading 'rt')
+   d.plot.idvrt <-
+       d.plot %>%
+       gather(fingerno,rt,rt1,rt4) %>%
+       mutate(fingerno=as.numeric(gsub('rt','',fingerno)) )
+
+  # what's the actual sequence. try to position it in the center of rt4 values
+  d.seqname <- 
+    d.plot %>% 
+    group_by(subj,agency,seqno,corseq) %>% 
+    summarise(trial=mean(trial),rt=mean(rt4,na.rm=T))
+
+  p <-
+       ggplot(d.plot.idvrt ) +
+       aes(x=trial,
+           y=rt,
+           color=agency,
+           shape=response,
+           linetype=fingerseq,
+           group=paste(fingerno,blkgrp) ) +
+       geom_point() +
+       geom_line() + 
+       geom_label(data=d.seqname,aes(group=NULL,shape=NULL,linetype=NULL,label=corseq)) +
+       theme_bw() + 
+       scale_shape_manual(values=c(1,16))+
+       ggtitle(paste0(example_subj,': all trials, rt1 & 4'))
+
+  return(p)
+}
