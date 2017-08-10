@@ -494,14 +494,25 @@ getAllData <- function() {
   pilot <- getPilots()
   kids <- getFullMatSeqLunaDate()
   
+  all.all.withtest <- rbind(as.data.frame(kids),pilot) %>% cleanData()
+
+  datetxt<-gsub("-","",Sys.Date()) 
+  all.withtest.fname <- sprintf("img/all_withtest_%s.csv",datetxt)
+  all.fname <- sprintf("img/all_%s.csv",datetxt)
+
+  write.table(all.all.withtest,file=all.withtest.fname,quote=F,row.names=F,sep=",")
+
+  # for initial analysis, we didn't care about tests
+  # so now all.all is actually not all the data, but all the not test trial data :)
+  # ret == normal, ret.test == test trial
   all.all <-
-   rbind(as.data.frame(kids),pilot) %>%
-   cleanData()
+   all.all.withtest %>%
+   filter(test=='ret')
 
- # save out this data
- write.table(all.all,file="img/all.csv",quote=F,row.names=F,sep=",")
+  # save out this data
+  write.table(all.all,file=all.fname,quote=F,row.names=F,sep=",")
 
- return(all.all)
+  return(all.all)
 }
 
 # - keep only noncontrol and ret  (??)
@@ -509,7 +520,7 @@ getAllData <- function() {
 # - add agegroup
 cleanData <- function(d) {
  d %>%
-   filter(agency!='control', test=='ret') %>%
+   filter(agency!='control') %>% # should be choice or yolked (or yoked), was control in older version
    mutate(
      # break ages into groups
      agegrp=cut(as.numeric(age),breaks=c(0,18,Inf),labels=c('kid','adult')),
